@@ -1,5 +1,6 @@
 {-# language
     DeriveDataTypeable
+  , DeriveFunctor
   , DeriveGeneric
   , DerivingStrategies
   , FlexibleInstances
@@ -14,26 +15,38 @@
   , ViewPatterns
 #-}
 
+{-# options_ghc -Wall #-}
+
 module Rose
   ( Rose
   , pattern Rose
+
+  , coiter
+  , coiterW
+  , unfold
+  , unfoldM
+  , telescoped
+  , telescoped_
+  , shoots
+  , leaves
   ) where
 
+import "base" Data.List qualified as List
 import "base" GHC.Read qualified as Read
 import "base" Text.ParserCombinators.ReadPrec qualified as Read
+import "base" Text.ParserCombinators.ReadPrec (ReadPrec)
 import "base" Text.Read.Lex qualified as Read
 import "base" Control.Monad.Zip (MonadZip)
 import "base" Data.Coerce (coerce)
-import "base" Data.Functor.Classes (Eq1, Ord1, Show1(..), Read1(..), showsBinaryWith)
+import "base" Data.Functor.Classes (Eq1, Ord1, Show1(..), Read1(..), readBinaryWith)
 import "base" GHC.Show (showSpace)
 import "base" GHC.Generics (Generic, Generic1)
 import "comonad" Control.Comonad (Comonad(..))
 import "free" Control.Comonad.Cofree (Cofree(..), ComonadCofree(..))
 import "free" Control.Comonad.Cofree qualified as Cofree
---import "indexed-traversable" Data.Foldable.WithIndex (FoldableWithIndex)
---import "indexed-traversable" Data.Functor.WithIndex (FunctorWithIndex)
---import "indexed-traversable" Data.Traversable.WithIndex (TraversableWithIndex(..))
 
+-- | A Rose tree. This type can be produced and consumed using the
+--   @Rose@ pattern.
 newtype Rose a = MkRose (Cofree [] a)
   deriving stock
     ( Generic
@@ -45,16 +58,15 @@ newtype Rose a = MkRose (Cofree [] a)
     , Eq
     , Eq1
     , Foldable
-    --, FoldableWithIndex [Int]
     , Functor
-    --, FunctorWithIndex [Int]
     , Monad
     , MonadZip
     , Ord
     , Ord1
     )
 
-instance (Show a) => Show (Rose a) where
+instance forall a. (Show a) => Show (Rose a) where
+  showsPrec :: Int -> Rose a -> ShowS
   showsPrec d (Rose a as) = id
     $ showParen (d >= 11)
     $ showString "Rose "
@@ -79,18 +91,30 @@ instance Show1 Rose where
         . showSpace
         . liftShowsPrec go goList 11 as
 
-instance Read a => Read (Rose a) where
+instance forall a. Read a => Read (Rose a) where
+  readPrec :: ReadPrec (Rose a)
   readPrec = Read.parens $ Read.prec 10 $ do
     Read.expectP (Read.Ident "Rose")
     a <- Read.step Read.readPrec
     as <- Read.step Read.readPrec
     pure (Rose a as)
 
-{-instance Read1 Rose where
-  liftReadsPrec rp rl = go
+instance Read1 Rose where
+  liftReadPrec :: forall a. ()
+    => ReadPrec a
+    -> ReadPrec [a]
+    -> ReadPrec (Rose a)
+  liftReadPrec rp rl = Read.parens
+    $ Read.prec 10
+    $ readBinaryWith rp (liftReadPrec goShoots goLeaves) "Rose" Rose
     where
-      goList = liftReadList rp rl
-      go d r = flip (readParen (d > 10)) r $ \r' -> [ ]-}
+      goShoots = do
+        ra <- rp
+        pure $ singleton ra
+      goLeaves = do
+        ras <- rl
+        pure $ List.map singleton ras
+
 instance Traversable Rose where
   traverse :: forall f a b. (Applicative f) => (a -> f b) -> Rose a -> f (Rose b)
   traverse f = fmap (coerce @(Cofree [] b) @(Rose b)) . traverse f . coerce
@@ -102,11 +126,6 @@ instance Comonad Rose where
   extract (MkRose (a :< _)) = a
   {-# inline extract #-}
 
---instance TraversableWithIndex [Int] Rose where
---  itraverse f (MkRose (a :< as)) =
---    fmap coerce ((:<) <$> f [] a <*> itraverse (\i -> itraverse (f . (:) i)) as)
---  {-# inline itraverse #-}
-
 pattern Rose :: a -> [Rose a] -> Rose a
 pattern Rose a as <- (pat -> (a, as))
   where
@@ -117,9 +136,34 @@ pat :: Rose a -> (a, [Rose a])
 pat (MkRose (a :< as)) = (a, coerce as)
 {-# inline pat #-}
 
+-- | Generate a singleton rose tree.
+--   It has no leaves and one shoot.
+--
+-- >>> singleton @Int 3
+-- Rose 3 []
+singleton :: a -> Rose a
+singleton a = Rose a []
+{-# inline singleton #-}
+
+-- | Use coiteration to generate a
+--   rose tree from a seed.
+--
+--   The coiteration terminates when
+--   the generating function returns
+--   an empty list:
+--
+-- >>> 'coiter' (\i -> if i > 3 then [] else [i + 1]) 0
+-- Rose 0 [Rose 1 [Rose 2 [Rose 3 [Rose 4 []]]]]
+--
+--   An infinite, lazy generator for
+--   the fibonacci sequence:
+--
+-- >>> take 10 $ map fst $ 'Data.Foldable.toList' $ 'coiter' (\(a, b) -> [(b, a + b)]) (0, 1)
 coiter :: (a -> [a]) -> a -> Rose a
 coiter = coerce Cofree.coiter
 
+-- | Like 'coiter' for comonadic values.
+--
 coiterW :: (Comonad w) => (w a -> [w a]) -> w a -> Rose a
 coiterW f w = MkRose (Cofree.coiterW f w)
 
@@ -152,6 +196,10 @@ telescoped_ :: (Functor f)
   -> f (Rose a)
 telescoped_ = foldr (\l r -> _unwrap . l . r) id
 
+-- | A @Traversal'@ that gives access to all non-leaf elements of a rose tree,
+-- where non-leaf is defined as @x@ from @Rose x xs@ where @null xs@ is @False@.
+--
+--   Because this doesn't give access to all values in the rose tree, it cannot be used to change types (use 'traverse' for that).
 shoots :: (Applicative f)
   => (a -> f a)
   -> Rose a
@@ -162,6 +210,11 @@ shoots f = go
       | null as = pure r
       | otherwise = Rose <$> f a <*> traverse go as
 
+-- | A @Traversal'@ that gives access to all leaf elements of a rose tree, where
+-- leaf is defined as @x@ from @Rose x xs@ where @null xs@ is @True@.
+--
+--   Because this doesn't give access to all values in the rose tree, it cannot
+--   be used to change types (use 'traverse' for that).
 leaves :: (Applicative f)
   => (a -> f a)
   -> Rose a
