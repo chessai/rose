@@ -20,7 +20,7 @@
 module Rose
   ( Rose
   , pattern Rose
-
+  , singleton
   , coiter
   , coiterW
   , unfold
@@ -31,16 +31,16 @@ module Rose
   , leaves
   ) where
 
-import "base" Data.List qualified as List
-import "base" GHC.Read qualified as Read
-import "base" Text.ParserCombinators.ReadPrec qualified as Read
-import "base" Text.ParserCombinators.ReadPrec (ReadPrec)
-import "base" Text.Read.Lex qualified as Read
 import "base" Control.Monad.Zip (MonadZip)
 import "base" Data.Coerce (coerce)
 import "base" Data.Functor.Classes (Eq1, Ord1, Show1(..), Read1(..), readBinaryWith)
-import "base" GHC.Show (showSpace)
+import "base" Data.List qualified as List
 import "base" GHC.Generics (Generic, Generic1)
+import "base" GHC.Read qualified as Read
+import "base" GHC.Show (showSpace)
+import "base" Text.ParserCombinators.ReadPrec (ReadPrec)
+import "base" Text.ParserCombinators.ReadPrec qualified as Read
+import "base" Text.Read.Lex qualified as Read
 import "comonad" Control.Comonad (Comonad(..))
 import "free" Control.Comonad.Cofree (Cofree(..), ComonadCofree(..))
 import "free" Control.Comonad.Cofree qualified as Cofree
