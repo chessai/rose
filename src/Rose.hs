@@ -5,7 +5,6 @@
   , DerivingStrategies
   , FlexibleInstances
   , GeneralizedNewtypeDeriving
-  , ImportQualifiedPost
   , InstanceSigs
   , MultiParamTypeClasses
   , PackageImports
@@ -17,6 +16,9 @@
 
 {-# options_ghc -Wall #-}
 
+-- | <https://en.wikipedia.org/wiki/Rose_tree Rose Trees> are trees with
+--   an unbounded number of branches per node. Each node contains a value
+--   and zero or more subtrees.
 module Rose
   ( Rose
   , pattern Rose
@@ -34,16 +36,16 @@ module Rose
 import "base" Control.Monad.Zip (MonadZip)
 import "base" Data.Coerce (coerce)
 import "base" Data.Functor.Classes (Eq1, Ord1, Show1(..), Read1(..), readBinaryWith)
-import "base" Data.List qualified as List
+import qualified "base" Data.List as List
 import "base" GHC.Generics (Generic, Generic1)
-import "base" GHC.Read qualified as Read
+import qualified "base" GHC.Read as Read
 import "base" GHC.Show (showSpace)
 import "base" Text.ParserCombinators.ReadPrec (ReadPrec)
-import "base" Text.ParserCombinators.ReadPrec qualified as Read
-import "base" Text.Read.Lex qualified as Read
+import qualified "base" Text.ParserCombinators.ReadPrec as Read
+import qualified "base" Text.Read.Lex as Read
 import "comonad" Control.Comonad (Comonad(..))
 import "free" Control.Comonad.Cofree (Cofree(..), ComonadCofree(..))
-import "free" Control.Comonad.Cofree qualified as Cofree
+import qualified "free" Control.Comonad.Cofree as Cofree
 
 -- | A Rose tree. This type can be produced and consumed using the
 --   @Rose@ pattern.
@@ -191,7 +193,7 @@ unfoldM un seed = fmap MkRose (Cofree.unfoldM un seed)
 _extract :: (Functor f) => (a -> f a) -> Rose a -> f (Rose a)
 _extract f (MkRose a) = fmap MkRose (Cofree._extract f a)
 
--- | This is a lens that can be used to read or writ to the tails of a rose tree.
+-- | This is a lens that can be used to read or write to the tails of a rose tree.
 --
 --   Using @^.@ from the @lens@ package:
 --
