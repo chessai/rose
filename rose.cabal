@@ -5,7 +5,10 @@ version:
   0.1
 synopsis:
   rose trees
--- description:
+description:
+  <https://en.wikipedia.org/wiki/Rose_tree Rose Trees> are trees with
+  an unbounded number of branches per node. Each node contains a value
+  and zero or more subtrees.
 homepage:
   https://github.com/chessai/rose
 bug-reports:
