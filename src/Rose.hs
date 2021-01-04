@@ -167,21 +167,67 @@ coiter = coerce Cofree.coiter
 coiterW :: (Comonad w) => (w a -> [w a]) -> w a -> Rose a
 coiterW f w = MkRose (Cofree.coiterW f w)
 
+-- | Unfold a rose tree from a seed.
 unfold :: (b -> (a, [b])) -> b -> Rose a
 unfold un seed = MkRose (Cofree.unfold un seed)
 
+-- | Unfold a rose tree from a seed, monadically.
 unfoldM :: (Monad m) => (b -> m (a, [b])) -> b -> m (Rose a)
 unfoldM un seed = fmap MkRose (Cofree.unfoldM un seed)
 
+-- | This is a lens that can be used to read or write from the target of 'extract'.
+--
+--   Using @^.@ from the @lens@ package:
+--
+-- @
+-- foo ^. '_extract' == 'extract' foo
+-- @
+--
+-- For more lenses see the @lens@ package
+--
+-- @
+-- '_extract' :: Lens' ('Rose' a) a
+-- @
 _extract :: (Functor f) => (a -> f a) -> Rose a -> f (Rose a)
 _extract f (MkRose a) = fmap MkRose (Cofree._extract f a)
 
+-- | This is a lens that can be used to read or writ to the tails of a rose tree.
+--
+--   Using @^.@ from the @lens@ package:
+--
+-- @
+-- foo ^. '_unwrap' == 'unwrap' foo
+-- @
+--
+-- For more lenses see the @lens@ package
+--
+-- @
+-- '_unwrap' :: Lens' ('Rose' a) ['Rose' a]
+-- @
 _unwrap :: (Functor f)
   => ([Rose a] -> f [Rose a])
   -> Rose a
   -> f (Rose a)
 _unwrap f (Rose a as) = (Rose a) <$> f as
 
+-- | Construct an @Lens@ into a rose tree given a list of lenses into the base functor.
+--
+--   When the input list is empty, this is equivalent to '_extract'.
+--   When the input list is non-empty, this composes the input lenses
+--   with '_unwrap' to walk through the rose tree before using
+--   '_extract' to get the element at the final location.
+--
+-- For more on lenses see the @lens@ package on hackage.
+--
+-- @telescoped :: [Lens' ['Rose' a] ('Rose' a)]      -> Lens' ('Rose' a) a@
+--
+-- @telescoped :: [Traversal' ['Rose' a] ('Rose' a)] -> Traversal' ('Rose' a) a@
+--
+-- @telescoped :: [Getter ['Rose' a] ('Rose' a)]     -> Getter ('Rose' a) a@
+--
+-- @telescoped :: [Fold ['Rose' a] ('Rose' a)]       -> Fold ('Rose' a) a@
+--
+-- @telescoped :: [Setter' ['Rose' a] ('Rose' a)]    -> Setter' ('Rose' a) a@
 telescoped :: (Functor f)
   => [(Rose a -> f (Rose a)) -> [Rose a] -> f [Rose a]]
   -> (a -> f a)
@@ -189,6 +235,24 @@ telescoped :: (Functor f)
   -> f (Rose a)
 telescoped = foldr (\l r -> _unwrap . l . r) _extract
 
+-- | Construct an @Lens@ into a rose tree given a list of lenses into the base functor.
+--
+--   The only difference between this and 'telescoped' is that 'telescoped' focuses on a single value, but this focuses on the entire remaining subtree.
+--   When the input list is empty, this is equivalent to 'id'.
+--   When the input list is non-empty, this composes the input lenses
+--   with '_unwrap' to walk through the rose tree.
+--
+-- For more on lenses see the @lens@ package on hackage.
+--
+-- @telescoped :: [Lens' ['Rose' a] ('Rose' a)]      -> Lens' ('Rose' a) ('Rose' a)@
+--
+-- @telescoped :: [Traversal' ['Rose' a] ('Rose' a)] -> Traversal' ('Rose' a) ('Rose' a)@
+--
+-- @telescoped :: [Getter ['Rose' a] ('Rose' a)]     -> Getter ('Rose' a) ('Rose' a)@
+--
+-- @telescoped :: [Fold ['Rose' a] ('Rose' a)]       -> Fold ('Rose' a) ('Rose' a)@
+--
+-- @telescoped :: [Setter' ['Rose' a] ('Rose' a)]    -> Setter' ('Rose' a) ('Rose' a)@
 telescoped_ :: (Functor f)
   => [(Rose a -> f (Rose a)) -> [Rose a] -> f [Rose a]]
   -> (Rose a -> f (Rose a))
@@ -197,7 +261,7 @@ telescoped_ :: (Functor f)
 telescoped_ = foldr (\l r -> _unwrap . l . r) id
 
 -- | A @Traversal'@ that gives access to all non-leaf elements of a rose tree,
--- where non-leaf is defined as @x@ from @Rose x xs@ where @null xs@ is @False@.
+--   where non-leaf is defined as @x@ from @Rose x xs@ where @null xs@ is @False@.
 --
 --   Because this doesn't give access to all values in the rose tree, it cannot be used to change types (use 'traverse' for that).
 shoots :: (Applicative f)
@@ -211,7 +275,7 @@ shoots f = go
       | otherwise = Rose <$> f a <*> traverse go as
 
 -- | A @Traversal'@ that gives access to all leaf elements of a rose tree, where
--- leaf is defined as @x@ from @Rose x xs@ where @null xs@ is @True@.
+--   leaf is defined as @x@ from @Rose x xs@ where @null xs@ is @True@.
 --
 --   Because this doesn't give access to all values in the rose tree, it cannot
 --   be used to change types (use 'traverse' for that).
